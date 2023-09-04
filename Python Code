@@ -1,0 +1,99 @@
+from google.colab import drive
+drive.mount('/content/drive')
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy.stats import norm
+%matplotlib inline
+
+# Use locale to convert numbers with commas
+import locale
+locale.setlocale(locale.LC_ALL, '')
+
+
+def black_scholes(S, X, T, r, sigma, type):
+    """
+    S= Current Stock Price
+    X= Strike Price
+    T= Time period before expiry (in years)
+    r= Risk-Free interest rate (10%)
+    Sigma= Implied Volatility
+    type= Call option or Put Option
+    """
+    d1 = (np.log(S / X) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    if type=="put":
+      option_price = X * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+    else:
+      option_price = S * norm.cdf(d1) - X * np.exp(-r * T) * norm.cdf(d2)
+    return option_price
+# Load data from CSV
+csv_file_path ="/content/drive/MyDrive/option-chain-ED-NIFTY-07-Sep-2023.csv"
+
+#Read CSV from path and make data-frame
+df = pd.read_csv(csv_file_path,skiprows=1)
+
+#Filter out unnamed columns
+df = df.filter(items=['IV','LTP','STRIKE','LTP.1','IV.1'])
+
+call_df = df[29:].copy()
+
+# Constant Inputs
+S = 19435.30    # Current stock price
+T = 6/252    # Time to expiration in years
+r = 0.1   # Risk-free interest rate
+
+call_df['IV'] = call_df['IV'].astype(float)
+call_df['LTP'] = call_df['LTP'].astype(float)
+call_df['STRIKE'] = call_df['STRIKE'].apply(locale.atof)
+
+# Create new column 'CallPrice' using the Strike and ImpliedVolatility values from each row
+call_df['CallPrice'] = call_df.apply(lambda row: black_scholes(S, row.STRIKE, T, r, row.IV/100, type="call"), axis = 1)
+
+#Iterate over rows
+for index, row in call_df.iterrows():
+    print(f"Strike Price: {row.STRIKE}, Implied Volatility: {row.IV}, Call Option Price: {row.CallPrice}")
+
+#Save to new CSV
+output_path = '/content/drive/MyDrive/call_price.csv'
+if len(output_path):
+  call_df.to_csv(output_path)
+
+plt.plot(call_df['STRIKE'],call_df['CallPrice'],label='Calculated')
+plt.plot(call_df['STRIKE'],call_df['LTP'], label = 'Actual')
+plt.xlabel("Strike")  # add X-axis label
+plt.ylabel("LTP - Call")  # add Y-axis label
+plt.title("Call Prices")  # add title
+plt.legend()
+plt.show()
+
+put_df = df[:46].copy()
+
+# Constant Inputs
+S = 19435.30    # Current stock price
+T = 6/252    # Time to expiration in years
+r = 0.1   # Risk-free interest rate
+
+put_df['IV'] = put_df['IV.1'].astype(float)
+put_df['LTP'] = put_df['LTP.1'].astype(float)
+put_df['STRIKE'] = put_df['STRIKE'].apply(locale.atof)
+
+# Create new column 'PutPrice' using the Strike and ImpliedVolatility values from each row
+put_df['PutPrice'] = put_df.apply(lambda row: black_scholes(S, row.STRIKE, T, r, row.IV/100, type="put"), axis = 1)
+
+#Iterate over rows
+for index, row in put_df.iterrows():
+    print(f"Strike Price: {row.STRIKE}, Implied Volatility: {row.IV}, Put Option Price: {row.PutPrice}")
+
+#Save to new CSV
+output_path = '/content/drive/MyDrive/put_price.csv'
+if len(output_path):
+  put_df.to_csv(output_path)
+
+plt.plot(put_df['STRIKE'],put_df['PutPrice'],label='Calculated')
+plt.plot(put_df['STRIKE'],put_df['LTP'],label='Actual')
+plt.xlabel("Strike")  # add X-axis label
+plt.ylabel("LTP - Put")  # add Y-axis label
+plt.title("Put Prices")  # add title
+plt.legend()
+plt.show()
